@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Сделки{% endblock %}
+{% block content %}
+<p>Сделки (всего {{ total }})</p>
+
+<table border="1" cellpadding="4" cellspacing="0">
+  <tr>
+    <th>Дата</th>
+    <th>Биржа</th>
+    <th>Товар</th>
+    <th>Покупатель</th>
+    <th>Продавец</th>
+    <th>Цена</th>
+    <th>Сумма</th>
+  </tr>
+  {% for r in rows %}
+  <tr>
+    <td>{{ r.trade_date }}</td>
+    <td>{{ r.exchange }}</td>
+    <td>{{ r.product_name }}</td>
+    <td>{{ r.buyer_name }}</td>
+    <td>{{ r.seller_name }}</td>
+    <td>{{ r.price_avg }}</td>
+    <td>{{ r.amount }}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="7">Нет данных. Запусти scripts/sync_db.py</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

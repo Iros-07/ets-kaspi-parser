@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>{% block title %}ETS + Каспий{% endblock %}</title>
+</head>
+<body>
+  <p>
+    <a href="/">Сделки</a> |
+    <a href="/journal">Журнал</a> |
+    <a href="/status">Статус</a>
+    |
+    <form action="/sync" method="post" style="display:inline">
+      <button type="submit">Обновить</button>
+    </form>
+  </p>
+  <hr>
+  {% block content %}{% endblock %}
+</body>
+</html>

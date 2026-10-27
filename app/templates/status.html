@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Статус{% endblock %}
+{% block content %}
+<p>Статус</p>
+
+<p>Всего записей: {{ total }}</p>
+
+<p>По биржам:</p>
+<ul>
+  {% for r in by_ex %}
+  <li>{{ r.exchange }}: {{ r.n }}</li>
+  {% else %}
+  <li>нет данных</li>
+  {% endfor %}
+</ul>
+
+<p>Последняя дата сделки:</p>
+<ul>
+  {% for r in last_dates %}
+  <li>{{ r.exchange }}: {{ r.last_date }}</li>
+  {% else %}
+  <li>нет данных</li>
+  {% endfor %}
+</ul>
+
+<p>Последний запуск парсера:</p>
+<table border="1" cellpadding="4" cellspacing="0">
+  <tr>
+    <th>Биржа</th>
+    <th>Время</th>
+    <th>Добавлено</th>
+    <th>Статус</th>
+    <th>Ошибка</th>
+  </tr>
+  {% for r in last_runs %}
+  <tr>
+    <td>{{ r.exchange }}</td>
+    <td>{{ r.finished_at }}</td>
+    <td>{{ r.added }}</td>
+    <td>{{ r.status }}</td>
+    <td>{{ r.error_text or "-" }}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="5">Ещё не запускали sync_db.py</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

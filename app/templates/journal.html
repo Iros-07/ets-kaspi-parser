@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Журнал{% endblock %}
+{% block content %}
+<p>Журнал запусков</p>
+
+<table border="1" cellpadding="4" cellspacing="0">
+  <tr>
+    <th>Начало</th>
+    <th>Конец</th>
+    <th>Биржа</th>
+    <th>Получено</th>
+    <th>Добавлено</th>
+    <th>Статус</th>
+    <th>Ошибка</th>
+  </tr>
+  {% for r in rows %}
+  <tr>
+    <td>{{ r.started_at }}</td>
+    <td>{{ r.finished_at }}</td>
+    <td>{{ r.exchange }}</td>
+    <td>{{ r.fetched }}</td>
+    <td>{{ r.added }}</td>
+    <td>{{ r.status }}</td>
+    <td>{{ r.error_text or "-" }}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="7">Пусто. Запусти sync_db.py</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}
