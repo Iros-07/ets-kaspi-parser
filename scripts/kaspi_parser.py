@@ -1,3 +1,4 @@
+# парсер Каспий - просто печатает таблицу в терминал
 import requests
 from bs4 import BeautifulSoup
 from tabulate import tabulate
@@ -5,50 +6,68 @@ from tabulate import tabulate
 URL = "https://ccx.kz/trading-and-analytics/trading-results?lang=ru"
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
-r = requests.get(URL, headers=HEADERS, timeout=30)
-r.raise_for_status()
-soup = BeautifulSoup(r.text, "lxml")
+otvet = requests.get(URL, headers=HEADERS, timeout=30)
+otvet.raise_for_status()
 
-table = soup.find("table")
-if not table:
+soup = BeautifulSoup(otvet.text, "lxml")
+tablica = soup.find("table")
+
+if tablica is None:
     print("таблица не найдена")
     raise SystemExit(1)
 
 rows = []
-for tr in table.find_all("tr")[1:]:
-    cols = [td.get_text(" ", strip=True) for td in tr.find_all("td")]
-    if len(cols) < 16:
+stroki = tablica.find_all("tr")
+
+nomer = 0
+for tr in stroki:
+    nomer = nomer + 1
+    if nomer == 1:
+        # заголовок пропускаем
         continue
 
-    date = cols[0]
-    product = cols[3]
-    price = cols[8]
-    amount = cols[9]
-    buyer = cols[11]
-    seller = cols[13]
-
-    if "итого" in product.lower():
+    yacheyki = tr.find_all("td")
+    if len(yacheyki) < 16:
         continue
 
-    if len(product) > 45:
-        product = product[:44] + "..."
-    if len(buyer) > 28:
-        buyer = buyer[:27] + "..."
-    if len(seller) > 28:
-        seller = seller[:27] + "..."
+    cols = []
+    for td in yacheyki:
+        cols.append(td.get_text(" ", strip=True))
 
-    price = price.replace(" ", "")
-    amount = amount.replace(" ", "")
+    data = cols[0]
+    tovar = cols[3]
+    cena = cols[8]
+    summa = cols[9]
+    pokupatel = cols[11]
+    prodavec = cols[13]
 
-    rows.append([date, product, buyer, seller, price, amount])
+    if "итого" in tovar.lower():
+        continue
 
-print(f"страница: {URL}")
+    if len(tovar) > 45:
+        tovar = tovar[0:44] + "..."
+
+    if len(pokupatel) > 28:
+        pokupatel = pokupatel[0:27] + "..."
+
+    if len(prodavec) > 28:
+        prodavec = prodavec[0:27] + "..."
+
+    cena = cena.replace(" ", "")
+    summa = summa.replace(" ", "")
+
+    rows.append([data, tovar, pokupatel, prodavec, cena, summa])
+
+print("страница:", URL)
 print()
-print("=== Каспий (CCX) ===")
+print("=== Каспий ===")
 print()
-print(tabulate(
-    rows,
-    headers=["Дата", "Товар", "Покупатель", "Продавец", "Цена ср.", "Сумма"],
-    tablefmt="github",
-))
-print(f"\nСтрок: {len(rows)}")
+print(
+    tabulate(
+        rows,
+        headers=["Дата", "Товар", "Покупатель", "Продавец", "Цена ср.", "Сумма"],
+        tablefmt="github",
+    )
+)
+print()
+print("Строк:", len(rows))

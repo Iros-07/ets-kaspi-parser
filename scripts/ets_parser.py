@@ -1,103 +1,141 @@
+# парсер ETS - качает последний excel и печатает в терминал
 import io
 import re
+from urllib.parse import urljoin
+
 import requests
 from bs4 import BeautifulSoup
 from openpyxl import load_workbook
 from tabulate import tabulate
-from urllib.parse import urljoin
 
 URL = "https://ets.kz/documents/trading-results/"
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
 
-def get_html(url):
-    r = requests.get(url, headers=HEADERS, timeout=30)
-    r.raise_for_status()
-    return BeautifulSoup(r.text, "lxml")
+def poluchit_html(url):
+    otvet = requests.get(url, headers=HEADERS, timeout=30)
+    otvet.raise_for_status()
+    return BeautifulSoup(otvet.text, "lxml")
 
 
-# страница итогов -> ссылка на год
-soup = get_html(URL)
+# 1) находим ссылку на год
+soup = poluchit_html(URL)
 year_url = None
+
 for a in soup.find_all("a", href=True):
-    t = a.get_text(" ", strip=True)
-    if re.search(r"Итоги торгов\s+\d{4}\s+год", t, re.I):
+    tekst = a.get_text(" ", strip=True)
+    if "Итоги торгов" in tekst and "год" in tekst:
+        # ссылки с месяцем пропускаем тут грубо
+        if "Октябрь" in tekst or "октябрь" in tekst:
+            continue
+        if "Январь" in tekst or "Февраль" in tekst:
+            continue
         year_url = urljoin(URL, a["href"])
+
 print("год:", year_url)
 
-# год -> месяцы
-soup = get_html(year_url)
-months = []
+# 2) месяцы
+soup = poluchit_html(year_url)
+mesyacy = []
+
 for a in soup.find_all("a", href=True):
-    t = a.get_text(" ", strip=True)
-    m = re.search(r"Итоги торгов\s+\d{4}\s+год\s+(\S+)", t, re.I)
-    if m:
-        months.append((m.group(1), urljoin(year_url, a["href"])))
-month_name, month_url = months[-1]  
+    tekst = a.get_text(" ", strip=True)
+    if "Итоги торгов" not in tekst:
+        continue
+    if tekst.strip().endswith("год"):
+        continue
+
+    chasti = tekst.split(" ")
+    if len(chasti) < 2:
+        continue
+
+    imya_mesyaca = chasti[-1]
+    ssylka = urljoin(year_url, a["href"])
+    mesyacy.append([imya_mesyaca, ssylka])
+
+posledniy_mesyac = mesyacy[len(mesyacy) - 1]
+month_name = posledniy_mesyac[0]
+month_url = posledniy_mesyac[1]
 print("месяц:", month_name, month_url)
 
-# месяц -> xlsx файлы
-soup = get_html(month_url)
-files = []
+# 3) excel файлы
+soup = poluchit_html(month_url)
+fayly = []
+uzhe = []
+
 for a in soup.find_all("a", href=True):
     href = a["href"]
     if ".xls" not in href.lower():
         continue
-    parent = a.find_parent(["li", "div", "p", "td"])
-    text = parent.get_text(" ", strip=True) if parent else ""
-    m = re.search(r"(\d{2}\.\d{2}\.\d{4})", text)
-    date = m.group(1) if m else "?"
-    files.append((date, urljoin(month_url, href)))
 
-# убрать дубли
-uniq = []
-seen = set()
-for date, link in files:
-    if link not in seen:
-        seen.add(link)
-        uniq.append((date, link))
-files = uniq
+    polnaya = urljoin(month_url, href)
+    if polnaya in uzhe:
+        continue
+    uzhe.append(polnaya)
 
-date, file_url = files[-1]
-print("файл:", date, file_url)
+    roditel = a.find_parent("li")
+    if roditel is None:
+        roditel = a.find_parent("div")
 
-# скачать excel
-r = requests.get(file_url, headers=HEADERS, timeout=60)
-wb = load_workbook(io.BytesIO(r.content), data_only=True)
-ws = wb.active
+    if roditel is not None:
+        podpis = roditel.get_text(" ", strip=True)
+    else:
+        podpis = ""
 
-# терминал
+    data = "?"
+    naydeno = re.search(r"(\d{2}\.\d{2}\.\d{4})", podpis)
+    if naydeno:
+        data = naydeno.group(1)
+
+    fayly.append([data, polnaya])
+
+posledniy = fayly[len(fayly) - 1]
+data = posledniy[0]
+file_url = posledniy[1]
+print("файл:", data, file_url)
+
+# 4) читаем excel
+otvet = requests.get(file_url, headers=HEADERS, timeout=60)
+kniga = load_workbook(io.BytesIO(otvet.content), data_only=True)
+list_excel = kniga.active
+
 rows = []
-for row in ws.iter_rows(min_row=5, values_only=True):
-    buyer = row[1]
-    seller = row[4]
-    product = row[7]
-    price = row[15]
-    amount = row[16]
+for row in list_excel.iter_rows(min_row=5, values_only=True):
+    pokupatel = row[1]
+    prodavec = row[4]
+    tovar = row[7]
+    cena = row[15]
+    summa = row[16]
 
-    if product is None:
-        continue
-    if str(product).strip().lower() == "итого":
+    if tovar is None:
         continue
 
-    p = str(product)
+    if str(tovar).strip().lower() == "итого":
+        continue
+
+    p = str(tovar)
     if len(p) > 48:
-        p = p[:40] + "..."
-    b = str(buyer or "")
+        p = p[0:40] + "..."
+
+    b = str(pokupatel or "")
     if len(b) > 28:
-        b = b[:20] + "..."
-    s = str(seller or "")
+        b = b[0:20] + "..."
+
+    s = str(prodavec or "")
     if len(s) > 48:
-        s = s[:40] + "..."
+        s = s[0:40] + "..."
 
-    rows.append([date, p, b, s, price, amount])
+    rows.append([data, p, b, s, cena, summa])
 
 print()
-print(f"=== ETS {date} ===")
+print("=== ETS", data, "===")
 print()
-print(tabulate(
-    rows,
-    headers=["Дата", "Товар", "Покупатель", "Продавец", "Цена ср.", "Сумма"],
-    tablefmt="github",
-))
-print(f"\nСтрок: {len(rows)}")
+print(
+    tabulate(
+        rows,
+        headers=["Дата", "Товар", "Покупатель", "Продавец", "Цена ср.", "Сумма"],
+        tablefmt="github",
+    )
+)
+print()
+print("Строк:", len(rows))

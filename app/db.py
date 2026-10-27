@@ -1,27 +1,45 @@
+# простые функции для запросов к postgres
 import sys
 from pathlib import Path
 
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+# db_config лежит в папке scripts
+put_k_scripts = Path(__file__).resolve().parent.parent / "scripts"
+sys.path.insert(0, str(put_k_scripts))
+
 from db_config import DB
 
 
-def get_conn():
-    return psycopg2.connect(**DB)
+def podkluchitsya():
+    conn = psycopg2.connect(
+        host=DB["host"],
+        port=DB["port"],
+        user=DB["user"],
+        password=DB["password"],
+        dbname=DB["dbname"],
+    )
+    return conn
 
 
-def fetch_all(sql, params=None):
-    conn = get_conn()
+def vzyat_vse(sql, params=None):
+    if params is None:
+        params = ()
+
+    conn = podkluchitsya()
     cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute(sql, params or ())
+    cur.execute(sql, params)
     rows = cur.fetchall()
     cur.close()
     conn.close()
     return rows
 
 
-def fetch_one(sql, params=None):
-    rows = fetch_all(sql, params)
-    return rows[0] if rows else None
+def vzyat_odnu(sql, params=None):
+    rows = vzyat_vse(sql, params)
+
+    if len(rows) == 0:
+        return None
+
+    return rows[0]

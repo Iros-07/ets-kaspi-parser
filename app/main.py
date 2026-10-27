@@ -1,3 +1,5 @@
+# сайт: сделки, журнал, статус
+# запуск: py -3 main.py
 import subprocess
 import sys
 from pathlib import Path
@@ -7,20 +9,26 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from db import fetch_all, fetch_one
+from db import vzyat_odnu, vzyat_vse
 
-SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
+papka_scripts = Path(__file__).resolve().parent.parent / "scripts"
+papka_app = Path(__file__).parent
 
 app = FastAPI()
-BASE = Path(__file__).parent
-templates = Jinja2Templates(directory=str(BASE / "templates"))
+templates = Jinja2Templates(directory=str(papka_app / "templates"))
+
 
 @app.get("/", response_class=HTMLResponse)
-def trades(request: Request):
-    total_row = fetch_one("SELECT COUNT(*) AS n FROM trades")
-    total = total_row["n"] if total_row else 0
+def stranica_sdelki(request: Request):
+    # сколько всего строк
+    stroka_count = vzyat_odnu("SELECT COUNT(*) AS n FROM trades")
+    if stroka_count is None:
+        total = 0
+    else:
+        total = stroka_count["n"]
 
-    rows = fetch_all(
+    # все сделки
+    rows = vzyat_vse(
         """
         SELECT trade_date, exchange, product_name, buyer_name, seller_name,
                price_avg, amount
@@ -33,7 +41,6 @@ def trades(request: Request):
         request=request,
         name="trades.html",
         context={
-            "tab": "trades",
             "rows": rows,
             "total": total,
         },
@@ -41,9 +48,9 @@ def trades(request: Request):
 
 
 @app.get("/journal", response_class=HTMLResponse)
-def journal(request: Request):
+def stranica_zhurnal(request: Request):
     try:
-        rows = fetch_all(
+        rows = vzyat_vse(
             """
             SELECT id, started_at, finished_at, exchange, fetched, added,
                    status, error_text
@@ -53,22 +60,36 @@ def journal(request: Request):
             """
         )
     except Exception:
+        # если таблицы ещё нет
         rows = []
 
     return templates.TemplateResponse(
         request=request,
         name="journal.html",
-        context={"tab": "journal", "rows": rows},
+        context={
+            "rows": rows,
+        },
     )
 
 
 @app.get("/status", response_class=HTMLResponse)
-def status(request: Request):
-    total = fetch_one("SELECT COUNT(*) AS n FROM trades")
-    by_ex = fetch_all(
-        "SELECT exchange, COUNT(*) AS n FROM trades GROUP BY exchange ORDER BY exchange"
+def stranica_status(request: Request):
+    stroka_count = vzyat_odnu("SELECT COUNT(*) AS n FROM trades")
+    if stroka_count is None:
+        total = 0
+    else:
+        total = stroka_count["n"]
+
+    by_ex = vzyat_vse(
+        """
+        SELECT exchange, COUNT(*) AS n
+        FROM trades
+        GROUP BY exchange
+        ORDER BY exchange
+        """
     )
-    last_dates = fetch_all(
+
+    last_dates = vzyat_vse(
         """
         SELECT exchange, MAX(trade_date) AS last_date
         FROM trades
@@ -76,15 +97,25 @@ def status(request: Request):
         ORDER BY exchange
         """
     )
+
+    # последние запуски: просто берём журнал и оставляем по 1 на биржу
+    last_runs = []
     try:
-        last_runs = fetch_all(
+        vse_zapuski = vzyat_vse(
             """
-            SELECT DISTINCT ON (exchange)
-                exchange, finished_at, added, status, error_text
+            SELECT exchange, finished_at, added, status, error_text
             FROM sync_log
-            ORDER BY exchange, id DESC
+            ORDER BY id DESC
             """
         )
+
+        uzhe_est = []
+        for zapusk in vse_zapuski:
+            birzha = zapusk["exchange"]
+            if birzha in uzhe_est:
+                continue
+            uzhe_est.append(birzha)
+            last_runs.append(zapusk)
     except Exception:
         last_runs = []
 
@@ -92,8 +123,7 @@ def status(request: Request):
         request=request,
         name="status.html",
         context={
-            "tab": "status",
-            "total": total["n"] if total else 0,
+            "total": total,
             "by_ex": by_ex,
             "last_dates": last_dates,
             "last_runs": last_runs,
@@ -102,10 +132,12 @@ def status(request: Request):
 
 
 @app.post("/sync")
-def sync():
+def knopka_obnovit():
+    # запускаем sync_db.py как отдельную программу
+    put_k_failu = papka_scripts / "sync_db.py"
     subprocess.run(
-        [sys.executable, str(SCRIPTS / "sync_db.py")],
-        cwd=str(SCRIPTS),
+        [sys.executable, str(put_k_failu)],
+        cwd=str(papka_scripts),
         check=False,
     )
     return RedirectResponse(url="/journal", status_code=303)
